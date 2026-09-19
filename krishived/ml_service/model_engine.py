@@ -184,6 +184,9 @@ class PlantDiseaseDetector:
             print(f"Loading best_cnn_model.pth from {model_path}...")
             state_dict = torch.load(model_path, map_location=self.device)
             self.model.load_state_dict(state_dict)
+            del state_dict
+            import gc
+            gc.collect()
             self.model.eval()
             print("[OK] Model loaded successfully!")
         else:
