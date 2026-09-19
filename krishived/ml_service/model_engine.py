@@ -170,6 +170,7 @@ class PlantDiseaseDetector:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             model_path = os.path.join(base_dir, "models", "best_cnn_model.pth")
 
+        torch.set_num_threads(1)
         self.device = torch.device("cpu")
         self.model = CNN(num_classes=4).to(self.device)
 
