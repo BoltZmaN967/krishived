@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-soil-50 text-ink font-body antialiased;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display text-canopy-800;
+  }
+  :focus-visible {
+    outline: 2px solid theme('colors.canopy.500');
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl2 shadow-card border border-soil-200;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-canopy-600 px-5 py-3 text-white font-semibold text-[15px] hover:bg-canopy-700 active:bg-canopy-800 transition-colors disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-white border border-soil-300 px-5 py-3 text-canopy-800 font-semibold text-[15px] hover:bg-soil-100 transition-colors;
+  }
+  .input {
+    @apply w-full rounded-xl border border-soil-300 bg-white px-4 py-3 text-[15px] text-ink placeholder:text-soil-400 focus:border-canopy-500 focus:ring-1 focus:ring-canopy-500 transition-colors;
+  }
+  .label {
+    @apply block text-sm font-semibold text-canopy-800 mb-1.5;
+  }
+}
