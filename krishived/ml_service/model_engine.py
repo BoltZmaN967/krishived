@@ -136,12 +136,17 @@ class GradCAM:
 
         # Backward pass on the specific class score
         score = output[0, class_idx]
-        score.backward(retain_graph=True)
+        score.backward()
 
         # Compute channel weights via global average pooling of gradients
         gradients = self.gradients.data.cpu().numpy()[0]  # shape: (256, 14, 14)
         activations = self.activations.data.cpu().numpy()[0]  # shape: (256, 14, 14)
         weights = np.mean(gradients, axis=(1, 2))  # shape: (256,)
+
+        # Immediately free intermediate PyTorch activations & gradients from RAM
+        self.gradients = None
+        self.activations = None
+        self.model.zero_grad(set_to_none=True)
 
         # Weighted combination of activation maps
         cam = np.zeros(activations.shape[1:], dtype=np.float32)
@@ -153,7 +158,8 @@ class GradCAM:
         if cam.max() > 0:
             cam = cam / cam.max()
 
-        return cam, output
+        output_detached = output.detach().cpu()
+        return cam, output_detached
 
 
 class PlantDiseaseDetector:
@@ -210,11 +216,14 @@ class PlantDiseaseDetector:
         cam_map, logits = self.grad_cam.generate(input_tensor)
 
         # Probabilities
-        probs = F.softmax(logits, dim=1).detach().cpu().numpy()[0]
+        probs = F.softmax(logits, dim=1).numpy()[0]
         pred_idx = int(np.argmax(probs))
         confidence = float(probs[pred_idx])
         class_name = CLASS_NAMES[pred_idx]
         meta = CLASS_METADATA[class_name]
+
+        # Free tensor memory immediately
+        del input_tensor, logits
 
         # Resize CAM to original image size & generate heatmap overlay
         cam_resized = cv2.resize(cam_map, (orig_w, orig_h))
