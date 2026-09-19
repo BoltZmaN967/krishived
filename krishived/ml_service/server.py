@@ -39,7 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {
         "service": "KrishiVed AI Model Server",
@@ -48,8 +48,8 @@ def root():
         "status": "online"
     }
 
-@app.get("/health")
-@app.get("/api/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
     return {
         "status": "ok",
