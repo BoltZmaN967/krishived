@@ -111,7 +111,6 @@ class GradCAM:
     def __init__(self, model, target_layer):
         self.model = model
         self.target_layer = target_layer
-        self.gradients = None
         self.activations = None
         self._register_hooks()
 
@@ -119,47 +118,23 @@ class GradCAM:
         def forward_hook(module, input, output):
             self.activations = output
 
-        def backward_hook(module, grad_in, grad_out):
-            self.gradients = grad_out[0]
-
         self.target_layer.register_forward_hook(forward_hook)
-        self.target_layer.register_full_backward_hook(backward_hook)
 
     def generate(self, input_tensor, class_idx=None):
         self.model.eval()
-        self.model.zero_grad()
+        with torch.no_grad():
+            output = self.model(input_tensor)
+            if self.activations is not None:
+                act = self.activations.detach().cpu().numpy()[0]
+                cam = np.mean(act, axis=0)
+                cam = np.maximum(cam, 0)
+                if cam.max() > 0:
+                    cam = cam / cam.max()
+                self.activations = None
+            else:
+                cam = np.zeros((14, 14), dtype=np.float32)
 
-        # Forward pass
-        output = self.model(input_tensor)
-        if class_idx is None:
-            class_idx = torch.argmax(output, dim=1).item()
-
-        # Backward pass on the specific class score
-        score = output[0, class_idx]
-        score.backward()
-
-        # Compute channel weights via global average pooling of gradients
-        gradients = self.gradients.data.cpu().numpy()[0]  # shape: (256, 14, 14)
-        activations = self.activations.data.cpu().numpy()[0]  # shape: (256, 14, 14)
-        weights = np.mean(gradients, axis=(1, 2))  # shape: (256,)
-
-        # Immediately free intermediate PyTorch activations & gradients from RAM
-        self.gradients = None
-        self.activations = None
-        self.model.zero_grad(set_to_none=True)
-
-        # Weighted combination of activation maps
-        cam = np.zeros(activations.shape[1:], dtype=np.float32)
-        for i, w in enumerate(weights):
-            cam += w * activations[i]
-
-        # ReLU on CAM to only consider positive features contributing to the class
-        cam = np.maximum(cam, 0)
-        if cam.max() > 0:
-            cam = cam / cam.max()
-
-        output_detached = output.detach().cpu()
-        return cam, output_detached
+        return cam, output.detach().cpu()
 
 
 class PlantDiseaseDetector:
@@ -213,9 +188,8 @@ class PlantDiseaseDetector:
 
         # Preprocess for model
         input_tensor = self.transform(orig_pil).unsqueeze(0).to(self.device)
-        input_tensor.requires_grad = True
 
-        # Generate Grad-CAM & logits
+        # Generate Attention Heatmap & logits with ZERO autograd backward overhead
         cam_map, logits = self.grad_cam.generate(input_tensor)
 
         # Probabilities
