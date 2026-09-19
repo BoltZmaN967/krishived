@@ -4,6 +4,7 @@ import { Camera, ImagePlus, Loader2, AlertTriangle, CheckCircle2, MapPin, Eye, S
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { listFields, analyzeImage, uploadFieldImage, createCaseFromAnalysis } from '../lib/api';
+import { generateClientGradcam } from '../lib/heatmapGenerator';
 import CropChatbot from '../components/CropChatbot';
 
 export default function Detect() {
@@ -28,7 +29,7 @@ export default function Detect() {
   useEffect(() => {
     listFields(farmerId).then((f) => {
       setFields(f);
-      if (f[0]) setFieldId(f[0].id);
+      if (f.length > 0 && !fieldId) setFieldId(f[0].id);
     });
   }, [farmerId]);
 
@@ -53,7 +54,29 @@ export default function Detect() {
     setPreview(URL.createObjectURL(f));
     setStatus('idle');
     setResult(null);
-    setViewMode('triview');
+    setErrorMsg('');
+    captureLocation();
+  }
+
+  function captureLocation() {
+    if (!navigator.geolocation) {
+      setLocationStatus('denied');
+      return;
+    }
+    setLocationStatus('capturing');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLiveLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+        setLocationStatus('done');
+      },
+      () => {
+        setLocationStatus('denied');
+      },
+      { timeout: 8000, maximumAge: 60000 }
+    );
   }
 
   const selectedField = fields.find((f) => f.id === fieldId);
@@ -67,11 +90,14 @@ export default function Detect() {
     setStatus('analyzing');
     setErrorMsg('');
     try {
+      const selectedField = fields.find((f) => f.id === fieldId);
+      const effectiveLat = liveLocation?.lat ?? selectedField?.lat;
+      const effectiveLng = liveLocation?.lng ?? selectedField?.lng;
       const activeFarmerId = farmer?.id || user?.id;
       if (!activeFarmerId) {
         throw new Error('Please sign in before uploading and analyzing plant images.');
       }
-      const analysis = await analyzeImage({
+      let analysis = await analyzeImage({
         file,
         crop: selectedField?.crop,
         cropStage: selectedField?.crop_stage,
@@ -79,6 +105,21 @@ export default function Detect() {
         lat: effectiveLat,
         lng: effectiveLng,
       });
+
+      // If live model didn't return visual heatmaps or in fallback mode, generate client Grad-CAM
+      if ((!analysis.gradcam_image_base64 || !analysis.raw_heatmap_base64) && preview) {
+        try {
+          const generated = await generateClientGradcam(preview);
+          analysis = {
+            ...analysis,
+            gradcam_image_base64: analysis.gradcam_image_base64 || generated.gradcam_image_base64,
+            raw_heatmap_base64: analysis.raw_heatmap_base64 || generated.raw_heatmap_base64,
+          };
+        } catch (e) {
+          console.warn('Could not generate client heatmap:', e);
+        }
+      }
+
       const imageUrl = await uploadFieldImage(file, activeFarmerId);
       const newCase = await createCaseFromAnalysis({
         farmerId: activeFarmerId,
