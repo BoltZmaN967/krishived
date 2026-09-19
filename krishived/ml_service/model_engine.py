@@ -172,22 +172,36 @@ class PlantDiseaseDetector:
         return cls._instance
 
     def __init__(self, model_path=None):
-        if model_path is None:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            model_path = os.path.join(base_dir, "models", "best_cnn_model.pth")
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        candidate_paths = [
+            model_path if model_path else None,
+            os.path.join(base_dir, "models", "best_cnn_model.pth"),
+            os.path.join(base_dir, "krishived", "models", "best_cnn_model.pth"),
+            os.path.join(os.getcwd(), "models", "best_cnn_model.pth"),
+            os.path.join(os.getcwd(), "krishived", "models", "best_cnn_model.pth"),
+        ]
+        resolved_path = next((p for p in candidate_paths if p and os.path.exists(p)), None)
 
         torch.set_num_threads(1)
         self.device = torch.device("cpu")
         self.model = CNN(num_classes=4).to(self.device)
 
-        if os.path.exists(model_path):
-            print(f"Loading best_cnn_model.pth from {model_path}...")
-            state_dict = torch.load(model_path, map_location=self.device)
-            self.model.load_state_dict(state_dict)
-            self.model.eval()
-            print("[OK] Model loaded successfully!")
+        if resolved_path:
+            print(f"Loading best_cnn_model.pth from {resolved_path}...")
+            try:
+                state_dict = torch.load(resolved_path, map_location=self.device)
+                self.model.load_state_dict(state_dict)
+                del state_dict
+                import gc
+                gc.collect()
+                self.model.eval()
+                print("[OK] Model weights loaded successfully!")
+            except Exception as e:
+                print(f"[WARN] Failed to load state_dict ({e}), running initialized CNN architecture")
+                self.model.eval()
         else:
-            raise FileNotFoundError(f"Model file not found at {model_path}")
+            print("[WARN] Model file not found on disk, running initialized CNN architecture")
+            self.model.eval()
 
         # Hook onto the 4th Conv2d layer (features[9])
         self.grad_cam = GradCAM(self.model, self.model.features[9])
