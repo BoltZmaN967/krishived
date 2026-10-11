@@ -4,7 +4,6 @@ import { Camera, ImagePlus, Loader2, AlertTriangle, CheckCircle2, MapPin, Eye, S
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { listFields, analyzeImage, uploadFieldImage, createCaseFromAnalysis } from '../lib/api';
-import { generateClientGradcam } from '../lib/heatmapGenerator';
 import CropChatbot from '../components/CropChatbot';
 
 export default function Detect() {
@@ -105,20 +104,6 @@ export default function Detect() {
         lat: effectiveLat,
         lng: effectiveLng,
       });
-
-      // If live model didn't return visual heatmaps or in fallback mode, generate client Grad-CAM
-      if ((!analysis.gradcam_image_base64 || !analysis.raw_heatmap_base64) && preview) {
-        try {
-          const generated = await generateClientGradcam(preview);
-          analysis = {
-            ...analysis,
-            gradcam_image_base64: analysis.gradcam_image_base64 || generated.gradcam_image_base64,
-            raw_heatmap_base64: analysis.raw_heatmap_base64 || generated.raw_heatmap_base64,
-          };
-        } catch (e) {
-          console.warn('Could not generate client heatmap:', e);
-        }
-      }
 
       const imageUrl = await uploadFieldImage(file, activeFarmerId);
       const newCase = await createCaseFromAnalysis({
@@ -334,11 +319,18 @@ export default function Detect() {
                 </div>
               </div>
             ) : (
-              <img
-                src={preview}
-                alt="Selected crop"
-                className="w-full max-h-72 object-cover rounded-xl border border-soil-200"
-              />
+              <>
+                <img
+                  src={preview}
+                  alt="Selected crop"
+                  className="w-full max-h-72 object-cover rounded-xl border border-soil-200"
+                />
+                {status === 'done' && (
+                  <p className="mt-2 text-xs text-soil-500">
+                    An image-specific Grad-CAM heatmap is unavailable for this result.
+                  </p>
+                )}
+              </>
             )}
 
             <div className="flex gap-3">

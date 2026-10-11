@@ -1,7 +1,6 @@
 // Single place every screen goes through to read/write data. Every function
-// checks `isDemoMode` and falls back to mock data, so the UI is fully
-// browsable before Supabase or the ML service exist, and nothing in the
-// components needs to change once they're wired up — only this file does.
+// checks `isDemoMode` and falls back to mock data, so the UI remains
+// browsable before Supabase is wired up. The ML service can run independently.
 
 import { supabase, isDemoMode } from './supabaseClient';
 import {
@@ -13,7 +12,13 @@ import {
   mockWeather,
 } from '../mock/data';
 
-const ML_API_URL = import.meta.env.VITE_ML_API_URL;
+const configuredMlApiUrl = import.meta.env.VITE_ML_API_URL;
+const ML_API_URL =
+  configuredMlApiUrl && !configuredMlApiUrl.includes('your-ml-service')
+    ? configuredMlApiUrl
+    : import.meta.env.DEV
+      ? 'http://127.0.0.1:8008/api/predict'
+      : undefined;
 const ML_API_KEY = import.meta.env.VITE_ML_API_KEY;
 const WEATHER_API_URL = import.meta.env.VITE_WEATHER_API_URL;
 const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
@@ -303,7 +308,7 @@ function getFallbackAnalysis(crop) {
 }
 
 export async function analyzeImage({ file, crop, cropStage, fieldId, lat, lng }) {
-  if (isDemoMode || !ML_API_URL || ML_API_URL.includes('your-ml-service')) {
+  if (!ML_API_URL) {
     await delay(1200);
     return getFallbackAnalysis(crop);
   }
@@ -326,7 +331,14 @@ export async function analyzeImage({ file, crop, cropStage, fieldId, lat, lng })
     if (!res.ok) {
       throw new Error(`Model service returned ${res.status}`);
     }
-    return await res.json();
+    const result = await res.json();
+    console.info('[ML OUTPUT] Prediction:', {
+      prediction: result.prediction,
+      class: result.raw_class ?? result.class_id,
+      confidence: result.confidence,
+      scores: result.all_scores,
+    });
+    return result;
   } catch (err) {
     console.warn('ML inference request failed (cold start / timeout), applying resilient fallback:', err);
     await delay(500);

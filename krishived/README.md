@@ -45,14 +45,16 @@ Once both are set, `isDemoMode` in `src/lib/supabaseClient.js` flips to
 
 ## Connecting the PyTorch CNN & Grad-CAM Model (`best_cnn_model.pth`)
 
-KrishiVed includes a dedicated PyTorch inference service with Grad-CAM visual attention mapping:
+KrishiVed includes a dedicated PyTorch inference service with class-specific Grad-CAM visual attention mapping. Start it in a terminal:
 
 ```bash
 # Start the ML Inference Server (port 8008)
 python ml_service/server.py
 ```
 
-The service loads `models/best_cnn_model.pth` (Custom 4-Class CNN) and computes Grad-CAM heatmaps on the last convolutional layer (`features[9]`), returning class predictions, confidence levels, clinical markers, and base64-encoded visual overlays.
+In local development, the frontend calls `http://127.0.0.1:8008/api/predict` by default, including when Supabase is in demo mode. Keep the model server running while analyzing images. For a deployed model service, set `VITE_ML_API_URL` to its `/api/predict` endpoint; configuring Supabase is not required to use the model.
+
+The service loads `models/best_cnn_model.pth` (Custom 4-Class CNN) and computes Grad-CAM heatmaps from gradients at the last convolutional layer (`features[9]`), returning class predictions, confidence levels, clinical markers, and base64-encoded visual overlays. If the model service is unavailable, the app uses a demo diagnosis and displays the original image instead of a fabricated Grad-CAM.
 
 | Field        | Type   | Required | Notes                          |
 |--------------|--------|----------|---------------------------------|
